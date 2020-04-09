@@ -27,6 +27,9 @@ import warnings
 warnings.filterwarnings('ignore')
 
 
+#安装决策树相关的包，
+# conda install graphviz
+# conda install pydotplus
 
 def character_VarFindFunc(df):
     """
@@ -39,7 +42,7 @@ def character_VarFindFunc(df):
     count=0
     character_name=[]
     for i in df.columns:#返回的是pandas的索引<class 'pandas.core.indexes.base.Index'>，如果是df.columns.values返回的是<class 'numpy.ndarray'>
-        if df[i].dtype == np.dtype('object') or df[i].dtype == np.dtype('bool'):#这样写也可str(df[i].dtype) == 'object':
+        if df[i].dtype == np.dtype('object') or df[i].dtype == np.dtype('bool'):#这样写也可str(df[i].dtype) == 'object': 不添加这个条件是因为当部分变量的值存在连续型数值时，后续使用LabelEncoder会存在这个报错y contains previously unseen labels，or df[i].nunique()<=5
             count=count+1
             character_name.append(i)
     if(count==0):
@@ -78,11 +81,12 @@ def find_abnormal(df):
     return df_new
 
 
-def findNaFunc(df):
+def findNaFunc(df,is_show_all=0):
     """
   缺失值统计
   param:
       df:需要计算缺失值到数据框
+      is_show_all -- 不缺失变量是否展示，默认为0，不展示，-1表示展示
   return:
       df_new:返回df中有缺失值到变量缺失个数和缺失率
     """   
@@ -91,7 +95,7 @@ def findNaFunc(df):
     df_new["queshi_num"]=df.isnull().sum()
     df_new["na_rate"]=round(df_new["queshi_num"]/len(df),4)
     df_new["na_rate_new"]=df_new["na_rate"].apply(lambda x: format(x, '.2%'))
-    df_new=df_new[df_new["queshi_num"]>0]
+    df_new=df_new[df_new["queshi_num"]>is_show_all]
     df_new=df_new.sort_values(by='queshi_num', axis=0, ascending=False)
     df_new=df_new.reset_index().rename(columns={"index":"var_name"})
     count=df_new.shape[0]
@@ -136,6 +140,7 @@ def feature_labelencoder(df):
     le=preprocessing.LabelEncoder()
     character_name,cate_count=character_VarFindFunc(df)
     df_new=df.copy()
+#     character_name.remove(target)
     for i in character_name:
         code_list=list(df_new[i].unique())
         encoder= le.fit(code_list)
@@ -328,10 +333,12 @@ def monot_trim(df,col,target,nan_value,cut=None):
         new_cut -- 调整后的分割点 list
     """
     woe_lst = cal_woe(df,col,target,nan_value,cut = cut)
+    count1=0
+    count2=0
     #new_cut=[]
     # 若第一个箱体大于0，说明特征整体上服从单调递减
     if woe_lst[0]>0:
-        while not judge_decreasing(woe_lst):
+        while not judge_decreasing(woe_lst) and count1<=10:
             # 找出哪几个箱不服从单调递减的趋势
             judge_list = [x>y for x, y in zip(woe_lst, woe_lst[1:])]
             # 用前向合并箱体的方式，找出需要剔除的分割点的索引，如果有缺失映射值，则索引+1
@@ -340,10 +347,12 @@ def monot_trim(df,col,target,nan_value,cut=None):
             else:
                 index_list = [i+1 for i,j in enumerate(judge_list) if j==False]
             new_cut=[j for i,j in enumerate(cut) if i not in index_list]
-#             woe_lst = cal_woe(df,col,target,nan_value,cut = new_cut)
+            woe_lst = cal_woe(df,col,target,nan_value,cut = new_cut)
+            count1=count1+1
+            woe_lst_new=woe_lst.copy()
     # 若第一个箱体小于0，说明特征整体上服从单调递增
     elif woe_lst[0]<0:
-        while not judge_increasing(woe_lst):
+        while not judge_increasing(woe_lst) and count2<=10:
             # 找出哪几个箱不服从单调递增的趋势
             judge_list = [x<y for x, y in zip(woe_lst, woe_lst[1:])]
             # 用前向合并箱体的方式，找出需要剔除的分割点的索引，如果有缺失映射值，则索引+1
@@ -352,8 +361,10 @@ def monot_trim(df,col,target,nan_value,cut=None):
             else:
                 index_list = [i+1 for i,j in enumerate(judge_list) if j==False]
             new_cut=[j for i,j in enumerate(cut) if i not in index_list]
-#             woe_lst = cal_woe(df,col,target,nan_value,cut = new_cut)
-    return new_cut
+            woe_lst = cal_woe(df,col,target,nan_value,cut = new_cut)
+            count2=count2+1
+            woe_lst_new=woe_lst.copy()
+    return new_cut,woe_lst_new
 
 
 
@@ -648,14 +659,14 @@ def iv_transform_df(bin_df_list):
             iv_df=iv_df.append(x,ignore_index=True)#不添加,ignore_index=True，会报categories must match existing categories when appending的错
         else:
             x["bins"]=x.index
-            x["var_name"]=x.index.name
+            x["col"]=x.index.name
             #iv_df1 = x.reset_index().assign(var_name=x.index.name).rename(columns={x.index.name:'bins'})
             iv_df=iv_df.append(x,ignore_index=True)
                  
     iv_df=iv_df.reset_index(drop=True)
 
-    var_name_order=['var_name','bins', 'IV','total', 'totalrate', 'bad', 'badrate', 'good', 'goodrate', 'badattr',
-           'goodattr', 'woe', 'bin_iv' ]
+    var_name_order=['col','bins', 'IV', 'woe', 'bin_iv','total', 'totalrate', 'bad', 'badrate', 'good', 'goodrate', 'badattr',
+           'goodattr' ]
     iv_df=iv_df[var_name_order]
     iv_df["fuzhu"]=iv_df.index
     iv_df.sort_values(by=['IV','fuzhu'], axis=0, ascending=(False,True), inplace=True)
@@ -705,7 +716,7 @@ def var_mapping(df,map_df,var_map,target,key_name='id'):
         map_df -- 特征映射集合表 Dataframe
         var_map -- map_df里映射的字段名，如"woe","score" string
         target -- 标签字段名 string
-        id -- 用户唯一识别id
+        id -- 用户唯一识别id,默认为"id"
     return:
         df2 -- 映射后的数据集 Dataframe
     """
@@ -863,16 +874,20 @@ def get_score_map(woe_df,coe_dict,B):
         score_df -- score的映射集合表 Dataframe
     """
     scores=[]
+    coe_show=[]
     for cc in woe_df.col.unique():
         woe_list = woe_df[woe_df.col==cc]['woe'].tolist()
         coe = coe_dict[cc]
         score = [round(coe*-B*w,0) for w in woe_list]#因为在我的刻度体系里B本身是正的，所以这里的B需要添加一个负号，以和公式A-B*log(odds)匹配
         scores.extend(score)
+        coe_1=[round(coe,4) for w in woe_list]
+        coe_show.extend(coe_1)
     woe_df['score'] = scores
+    woe_df['coe'] = coe_show
     score_df = woe_df.copy()
-    var_name_order=['col', 'bin','IV', 'score', 'total','totalrate', 'bad', 'badrate', 'good',
-       'goodrate', 'badattr', 'goodattr', 'woe', 'bin_iv',  'bins',
-       'var_name', 'min_bin', 'max_bin']
+    var_name_order=['col', 'bins','IV', 'score','coe','woe','total','totalrate', 'bad', 'badrate', 'good',
+       'goodrate', 'badattr', 'goodattr', 'bin_iv',
+        'min_bin', 'max_bin']
     score_df=score_df[var_name_order]
     score_df["fuzhu"]=score_df.index
     score_df.sort_values(by=['IV','fuzhu'], axis=0, ascending=(False,True), inplace=True)
