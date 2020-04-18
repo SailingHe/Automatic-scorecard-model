@@ -27,6 +27,11 @@ import warnings
 warnings.filterwarnings('ignore')
 
 
+
+
+
+
+
 #安装决策树相关的包，
 # conda install graphviz
 # conda install pydotplus
@@ -98,7 +103,8 @@ def findNaFunc(df,is_show_all=0):
     df_new=df_new[df_new["queshi_num"]>is_show_all]
     df_new=df_new.sort_values(by='queshi_num', axis=0, ascending=False)
     df_new=df_new.reset_index().rename(columns={"index":"var_name"})
-    count=df_new.shape[0]
+    x=df_new[df_new["queshi_num"]>0]
+    count=x.shape[0]
 # 若无缺失，则显示没有缺失变量
     if(count==0):
         print("no variable contain NA!")
@@ -1007,27 +1013,34 @@ def plot_score_hist(df,target,score_col,title,plt_size=None):
 
 
 
-def cal_psi(df1,df2,col,bin_num=5):
+def cal_psi(df1,df2,col,bin_num=5,group_type="qcut",qcut_cut_list=[0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0]
+            ,cut_cut_list=10,right_border=True):
     """
     计算psi
     param:
         df1 -- 数据集A Dataframe
         df2 -- 数据集B Dataframe
         col -- 字段名 string
-        bin_num -- 连续型特征的分箱数 默认为5
+        bin_num -- 值数量小于此阈值的按照离散型变量分箱
+        group_type -- 分箱类型，默认为等频("qcut")，可以选择等距("cut")
+        qcut_cut_list -- 指分箱方式为qcut时对应的分箱节点列表，为分位数，默认为[0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0]，也可指定箱的组数而不指定具体列表，例如10
+        cut_cut_list -- 指分箱方式为cut时对应的分箱节点列表，为分箱具体节点，也可指定箱的组数而不指定具体列表，例如10
+        right_border -- 箱的右边是否含在组内
     return:
-        psi float
+        psi -- float
         bin_df -- psi明细表 Dataframe
     """
     # 对于离散型特征直接根据类别进行分箱，分箱逻辑以数据集A为准
     if df1[col].dtype == np.dtype('object') or df1[col].dtype == np.dtype('bool') or df1[col].nunique()<=bin_num:
-        bin_df1 = df1[col].value_counts().to_frame().reset_index().rename(columns={'index':col,col:'total_A'})
+        bin_df1 = df1[col].value_counts().to_frame().reset_index().rename(columns={'index':"bins",col:'total_A'})
         bin_df1['totalrate_A'] = bin_df1['total_A']/df1.shape[0]
-        bin_df2 = df2[col].value_counts().to_frame().reset_index().rename(columns={'index':col,col:'total_B'})
+#         bin_df1["var_name"]=col
+        bin_df2 = df2[col].value_counts().to_frame().reset_index().rename(columns={'index':"bins",col:'total_B'})
         bin_df2['totalrate_B'] = bin_df2['total_B']/df2.shape[0]
-    else:
+#         bin_df2["var_name"]=col
+    elif group_type=="qcut":
         # 这里采用的是等频分箱
-        bin_series,bin_cut = pd.qcut(df1[col],q=bin_num,duplicates='drop',retbins=True)
+        bin_series,bin_cut = pd.qcut(df1[col],q=qcut_cut_list,duplicates='drop',retbins=True)
         bin_cut[0] = float('-inf')
         bin_cut[-1] = float('inf')
         bucket1 = pd.cut(df1[col],bins=bin_cut)
@@ -1035,28 +1048,207 @@ def cal_psi(df1,df2,col,bin_num=5):
         bin_df1=pd.DataFrame()
         bin_df1['total_A'] = group1[col].count()
         bin_df1['totalrate_A'] = bin_df1['total_A']/df1.shape[0]
-        bin_df1 = bin_df1.reset_index()
+        bin_df1 = bin_df1.reset_index().rename(columns={col:"bins"})
 
         bucket2 = pd.cut(df2[col],bins=bin_cut)
         group2 = df2.groupby(bucket2)
         bin_df2=pd.DataFrame()
         bin_df2['total_B'] = group2[col].count()
         bin_df2['totalrate_B'] = bin_df2['total_B']/df2.shape[0]
-        bin_df2 = bin_df2.reset_index()
+        bin_df2 = bin_df2.reset_index().rename(columns={col:"bins"})
+    else:
+        bin_series,bin_cut = pd.cut(df1[col],bins=cut_cut_list,right=right_border,retbins=True)#retbins=True得选择为true，否则给bin_cut添加值时会报错'tuple' object does not support item assignment
+        bin_cut[0] = float('-inf')
+        bin_cut[-1] = float('inf')
+        bucket1 = pd.cut(df1[col],bins=bin_cut)
+        group1 = df1.groupby(bucket1)
+        bin_df1=pd.DataFrame()
+        bin_df1['total_A'] = group1[col].count()
+        bin_df1['totalrate_A'] = bin_df1['total_A']/df1.shape[0]
+        bin_df1 = bin_df1.reset_index().rename(columns={col:"bins"})
+
+        bucket2 = pd.cut(df2[col],bins=bin_cut)
+        group2 = df2.groupby(bucket2)
+        bin_df2=pd.DataFrame()
+        bin_df2['total_B'] = group2[col].count()
+        bin_df2['totalrate_B'] = bin_df2['total_B']/df2.shape[0]
+        bin_df2 = bin_df2.reset_index().rename(columns={col:"bins"})
+        
     # 计算psi
-    bin_df = pd.merge(bin_df1,bin_df2,on=col)
+    bin_df = pd.merge(bin_df1,bin_df2,on="bins")
+    bin_df["var_name"]=col
     bin_df['a'] = bin_df['totalrate_B'] - bin_df['totalrate_A']
     bin_df['b'] = np.log(bin_df['totalrate_B']/bin_df['totalrate_A'])
     bin_df['Index'] = bin_df['a']*bin_df['b']
-    bin_df['PSI'] = bin_df['Index'].sum().round(4)
-    bin_df = bin_df.drop(['a','b'],axis=1)
+    bin_df['PSI_i']=0.0000
+    for i in bin_df.index:#这里是为了排除等距分箱时，某些箱数量过少，甚至出现0的情况而导致的计算出的psi出现infinity情况
+        if bin_df['total_A'][i]+bin_df['total_B'][i]>10:
+            bin_df['PSI_i'][i] = bin_df['Index'][i]
+    
+    bin_df['PSI'] = bin_df['PSI_i'].sum().round(4)
+#     bin_df['PSI'] = bin_df['Index'].sum().round(4)
+    bin_df = bin_df.drop(['a','b',"Index"],axis=1)
+    var_name_order=['var_name','bins', 'PSI','total_A', 'totalrate_A', 'total_B', 'totalrate_B', 
+       'PSI_i']
+    bin_df=bin_df[var_name_order]
     
     psi =bin_df.PSI.iloc[0]
     
     return psi,bin_df
 
 
+def datetime_as_timezone(date_time, time_zone):
+    """
+    时区转换
+    remark：一旦生成了一个offset-aware类型的datetime对象，我们就能调用它的astimezone()方法，生成其他时区的时间（会根据时差来计算）。
+    而如果拿到的是offset-naive类型的datetime对象，也是可以调用它的replace()方法来替换tzinfo的，只不过这种替换不会根据时差来调整其他时间属性。
+    因此，如果拿到一个格林威治时间的offset-naive类型的datetime对象，直接调用replace(tzinfo=UTC())即可转换成offset-aware类型，然后再调用astimezone()生成其他时区的datetime对象。
+    而如果是+6:00时区的offset-naive类型的datetime对象，则可以创建一个+6:00时区的tzinfo类，然后用上述方式转换。
+    而反过来要将offset-aware类型转换成offset-naive类型时，为了不至于弄混，建议先用astimezone(UTC())生成格林威治时间，然后再replace(tzinfo=None)，参考博客：https://blog.csdn.net/wujingwen1111/article/details/8551957?depth_1-utm_source=distribute.pc_relevant.none-task-blog-OPENSEARCH-16&utm_source=distribute.pc_relevant.none-task-blog-OPENSEARCH-16
+    param:
+        date_time -- 需要转换时区的日期
+        time_zone -- 需要转换到到时区
+    """
+    tz = timezone(time_zone)
+    utc = timezone('UTC')
+    return date_time.replace(tzinfo=utc).astimezone(tz)
 
+
+import toad
+import pydotplus
+from IPython.display import Image
+from sklearn.externals.six import StringIO
+from sklearn import tree  
+class auto_tree(object):
+   
+    def __init__(self,datasets,ex_lis,dep='target',min_samples=0.05,min_samples_leaf=200,min_samples_split=20,max_depth=4,is_bin=True):
+
+        '''
+        param:
+            datasets:数据集 dataframe格式
+            ex_lis：不参与建模的特征，如id，时间切片等。 list格式
+            min_samples：分箱时最小箱的样本占总比 numeric格式
+            max_depth：决策树最大深度 numeric格式
+            min_samples_leaf：决策树子节点最小样本个数 numeric格式
+            min_samples_split：决策树划分前，父节点最小样本个数 numeric格式
+            is_bin：是否进行卡方分箱 bool格式（True/False）
+        return:
+            df_bin 数据，分箱后用箱编号代替原变量值
+            bins 分箱详情，可找到每个分箱的具体逻辑
+            combiner 分箱的工具，通过combiner.transform可以将其他数据文件分箱
+            graph 图像文件，需要通过Image函数打印出来
+        '''
+        self.datasets = datasets
+        self.ex_lis = ex_lis
+        self.dep = dep
+        self.max_depth = max_depth
+        self.min_samples = min_samples
+        self.min_samples_leaf = min_samples_leaf
+        self.min_samples_split = min_samples_split
+        self.is_bin = is_bin
+
+        self.bins = 0
+        
+    def fit_plot(self):
+#         os.environ["PATH"] += os.pathsep + 'D:/Program Files/Graphviz2.38/bin'
+        dtree = tree.DecisionTreeRegressor(max_depth=self.max_depth,
+                                           min_samples_leaf=self.min_samples_leaf, 
+                                           min_samples_split=self.min_samples_split)
+        
+        x = self.datasets.drop(self.ex_lis,axis=1)
+        y = self.datasets[self.dep]
+        
+        if self.is_bin:
+            #分箱
+            combiner = toad.transform.Combiner()
+            combiner.fit(x,y,method='chi',min_samples = self.min_samples)
+
+            x_bin= combiner.transform(x)
+            self.bins = combiner.export()        
+        else:
+            x_bin = x.copy()
+            combiner=None
+            
+        dtree = dtree.fit(x_bin,y) 
+        
+        df_bin = x_bin.copy()
+        
+        df_bin[self.dep] = y
+        
+        dot_data = StringIO()
+        tree.export_graphviz(dtree, out_file=dot_data,
+                                 feature_names=x_bin.columns,
+                                 class_names=[self.dep],
+                                 filled=True, rounded=True,
+                                 special_characters=True)
+        graph = pydotplus.graph_from_dot_data(dot_data.getvalue()) 
+            
+        return df_bin,self.bins,combiner,graph.create_png()
+
+    
+def data_explore(df_name,replace_name,col_width,na_threshold=0.7,show_type=0):
+    """
+    对数据进行简单eda
+    df_name -- 需要进行数据探索的数据框
+    replace_name -- 需要替换的表名，因为hue导出时，字段名里会带上表名
+    col_width -- 展示的表单的字段宽度
+    na_threshold -- 缺失变量缺失率阈值，默认位0.7，即删除缺失比例大于阈值的变量，不进行分布(分位数这些)查看
+    show_type -- 哪些变量在缺失率展示时需要展示，0表示值展示有缺失的变量，-1表示所有变量均展示，默认为0
+    """
+#数据读取
+    data=pd.read_csv(df_name) 
+    
+     #列名将表名使用空格替换掉
+    col_name=pd.DataFrame(pd.Series(data.columns.values),columns=["var_name"])
+    excel_name=df_name.replace('.csv','')+'.xlsx'
+    col_name.to_excel(excel_name)
+    # col_name=col_name["var_name"].map(lambda x:x.replace('dm_experian_report_feature_detail_dt.',''))
+    col_name=col_name["var_name"].map(lambda x:x.replace(replace_name,''))
+    data.columns=list(col_name)
+    
+ 
+    print("\033[1;31m数据量级和特征数据类型\n \033[0m")
+    print(data.info())
+    print(data.columns)
+    
+      
+    print("\033[1;31m少量数据查看\n \033[0m")
+    show(data.head(),columnDefs=[{"width": col_width,"high": "80px", "targets": "_all"}])
+
+    #离散型，连续型变量个数
+    character_feature,count=self_f_2.character_VarFindFunc(data)
+    print("\033[1;31m离散型变量个数\n \033[0m",count)
+    print("\033[1;31m连续型变量个数\n \033[0m",len(data.columns)-count)
+
+    #1.2.1缺失值统计
+    feature_na,na_feature_num=self_f_2.findNaFunc(data,show_type=show_type)
+
+    # feature_na=feature_na.rename(columns={"queshi_num":"缺失值数量","na_rate":"缺失率"})
+    print("\033[1;31m有缺失值的变量个数:\n \033[0m",na_feature_num)
+    print("\033[1;31m各变量缺失率展示\n \033[0m")
+    feature_na_show=feature_na.sort_values(by='queshi_num', axis=0, ascending=False)
+    feature_na_show=feature_na_show.reset_index(drop=False)
+    
+    #表单字段缺失率查看
+    excel_name=df_name.replace('.csv','')+'.xlsx'
+    feature_na_show.to_excel(excel_name)
+    
+    show(feature_na_show,columnDefs=[{"width": col_width,"high": "80px", "targets": "_all"}])
+    
+
+    #缺失率少于某个阈值的特征，才进行分布展示
+    delete_feature=feature_na[feature_na["na_rate"]>na_threshold].var_name #当不想删除缺失特征时，可提高na_rate阈值
+    data_delete=data.drop(delete_feature,axis=1)
+    na_count=len(delete_feature)
+    
+    print("\033[1;31m去掉缺失率大于阈值的变量\n \033[0m",na_count)
+    print("\033[1;31m去掉缺失率较高连续型变量分布\n \033[0m")
+    show(data_delete.describe(),columnDefs=[{"width": col_width,"high": "80px", "targets": "_all"}])
+    print("\033[1;31m去掉缺失率较高离散型变量分布\n \033[0m")
+    show(data_delete.describe(include=['object']),columnDefs=[{"width": col_width,"high": "80px", "targets": "_all"}])
+
+
+    
 # try:   
 #     get_ipython().system('jupyter nbconvert --to python file_name.ipynb')
 #     # python即转化为.py，script即转化为.html
