@@ -1247,7 +1247,10 @@ def data_explore(df_name,replace_name,col_width,na_threshold=0.7,show_type=0):
     print("\033[1;31m去掉缺失率较高离散型变量分布\n \033[0m")
     show(data_delete.describe(include=['object']),columnDefs=[{"width": col_width,"high": "80px", "targets": "_all"}])
 
-
+def datetime_as_timezone(date_time, time_zone):
+    tz = timezone(time_zone)
+    utc = timezone('UTC')
+    return date_time.replace(tzinfo=utc).astimezone(tz)
     
 # try:   
 #     get_ipython().system('jupyter nbconvert --to python file_name.ipynb')
