@@ -1186,42 +1186,43 @@ class auto_tree(object):
         return df_bin,self.bins,combiner,graph.create_png()
 
     
-def data_explore(df_name,replace_name,col_width,na_threshold=0.7,show_type=0):
+def data_explore(df,df_name,col_width="200px",na_threshold=0.7,is_show_all=0):
     """
     对数据进行简单eda
-    df_name -- 需要进行数据探索的数据框
-    replace_name -- 需要替换的表名，因为hue导出时，字段名里会带上表名
-    col_width -- 展示的表单的字段宽度
-    na_threshold -- 缺失变量缺失率阈值，默认位0.7，即删除缺失比例大于阈值的变量，不进行分布(分位数这些)查看
+    df -- 需要进行数据探索的数据框
+    df_name -- 需要进行数据探索的数据框的命名
+    col_width -- 展示的表单的字段宽度，默认为200px
+    na_threshold -- 缺失变量缺失率阈值，默认为0.7，即删除缺失比例大于阈值的变量，不进行分布(分位数这些)查看
     show_type -- 哪些变量在缺失率展示时需要展示，0表示值展示有缺失的变量，-1表示所有变量均展示，默认为0
     """
 #数据读取
-    data=pd.read_csv(df_name) 
+#replace_name -- 需要替换的表名，因为hue导出时，字段名里会带上表名
+
+#     data=pd.read_csv(df_name) 
     
      #列名将表名使用空格替换掉
-    col_name=pd.DataFrame(pd.Series(data.columns.values),columns=["var_name"])
-    excel_name=df_name.replace('.csv','')+'.xlsx'
-    col_name.to_excel(excel_name)
-    # col_name=col_name["var_name"].map(lambda x:x.replace('dm_experian_report_feature_detail_dt.',''))
-    col_name=col_name["var_name"].map(lambda x:x.replace(replace_name,''))
-    data.columns=list(col_name)
+#     col_name=pd.DataFrame(pd.Series(data.columns.values),columns=["var_name"])
+#     excel_name=df_name.replace('.csv','')+'.xlsx'
+#     col_name.to_excel(excel_name)
+#     col_name=col_name["var_name"].map(lambda x:x.replace(replace_name,''))
+#     data.columns=list(col_name)
     
- 
+    data=df.copy()
     print("\033[1;31m数据量级和特征数据类型\n \033[0m")
     print(data.info())
-    print(data.columns)
+#     print(data.columns)
     
       
     print("\033[1;31m少量数据查看\n \033[0m")
     show(data.head(),columnDefs=[{"width": col_width,"high": "80px", "targets": "_all"}])
 
     #离散型，连续型变量个数
-    character_feature,count=self_f_2.character_VarFindFunc(data)
+    character_feature,count=character_VarFindFunc(data)
     print("\033[1;31m离散型变量个数\n \033[0m",count)
     print("\033[1;31m连续型变量个数\n \033[0m",len(data.columns)-count)
 
     #1.2.1缺失值统计
-    feature_na,na_feature_num=self_f_2.findNaFunc(data,show_type=show_type)
+    feature_na,na_feature_num=findNaFunc(data,is_show_all=is_show_all)
 
     # feature_na=feature_na.rename(columns={"queshi_num":"缺失值数量","na_rate":"缺失率"})
     print("\033[1;31m有缺失值的变量个数:\n \033[0m",na_feature_num)
@@ -1230,7 +1231,7 @@ def data_explore(df_name,replace_name,col_width,na_threshold=0.7,show_type=0):
     feature_na_show=feature_na_show.reset_index(drop=False)
     
     #表单字段缺失率查看
-    excel_name=df_name.replace('.csv','')+'.xlsx'
+    excel_name=df_name+'.xlsx'
     feature_na_show.to_excel(excel_name)
     
     show(feature_na_show,columnDefs=[{"width": col_width,"high": "80px", "targets": "_all"}])
@@ -1247,10 +1248,17 @@ def data_explore(df_name,replace_name,col_width,na_threshold=0.7,show_type=0):
     print("\033[1;31m去掉缺失率较高离散型变量分布\n \033[0m")
     show(data_delete.describe(include=['object']),columnDefs=[{"width": col_width,"high": "80px", "targets": "_all"}])
 
-def datetime_as_timezone(date_time, time_zone):
-    tz = timezone(time_zone)
-    utc = timezone('UTC')
-    return date_time.replace(tzinfo=utc).astimezone(tz)
+
+def row_number(dataset, partionby, orderby, asc):
+    '''
+    dataset: DataFrame格式数据集
+    partionby：分组依据字段
+    orderby：排序依据字段
+    asc:是否为升序；1:升序；0:降序
+    return series格式：序号
+    '''
+    return dataset[orderby].groupby(dataset[partionby]).rank(ascending=asc, method='first')
+
     
 # try:   
 #     get_ipython().system('jupyter nbconvert --to python file_name.ipynb')
