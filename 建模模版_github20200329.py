@@ -48,11 +48,12 @@ import matplotlib.pyplot as plt ##python里适用最广泛的 可视化库，与
 import seaborn as sns ##此包是基于matplotlib的可视化包
 import itables.interactive#每一个表都是交互型的表
 from itables import show
+pd.set_option('display.max_columns',None)
 import itables.options as opt
 opt.classes = ["display", "nowrap"]
 opt.lengthMenu = [10, 10, 100, 200, 500, 1000, 2000, 5000]
 opt.maxBytes = 200000
-opt.maxColumns=100
+# opt.maxColumns=100
 opt.columnDefs=[{"width": "150px", "targets": "_all"}]
 
 
