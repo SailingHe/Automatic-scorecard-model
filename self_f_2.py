@@ -7,13 +7,12 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-
-import numpy as np 
-import pandas as pd 
-import matplotlib.pyplot as plt 
-import seaborn as sns 
+import sys
+import os ##显示工作路径，修改工作路径的包
+import numpy as np##是python数值计算基石，听过多种数据结构，算法以及设计计算所需的接口
+import pandas as pd##提供了高级数据结构和函数，dataframe,series
 import math 
-import statsmodels.api as sm
+import statsmodels.api as sm##统计分析包，方差分析，时间序列分析，非参数估计 import statsmodels.api as sm
 from statsmodels.stats.outliers_influence import variance_inflation_factor
 from sklearn import preprocessing
 from sklearn.model_selection import train_test_split
@@ -25,10 +24,31 @@ from sklearn.tree import DecisionTreeClassifier,_tree
 from IPython.display import display
 import warnings
 warnings.filterwarnings('ignore')
+#可视化
+import matplotlib.pyplot as plt ##python里适用最广泛的 可视化库，与其他库良好整合
+import seaborn as sns ##此包是基于matplotlib的可视化包
+import itables.interactive#每一个表都是交互型的表
+from itables import show
+import itables.options as opt
+opt.classes = ["display", "nowrap"]
+opt.lengthMenu = [10, 10, 100, 200, 500, 1000, 2000, 5000]
+opt.maxBytes = 200000
+opt.maxColumns=100
+opt.columnDefs=[{"width": "150px", "targets": "_all"}]
+import time
+from pytz import timezone
+from datetime import datetime
 
 
 
 
+#画图支持中文字体
+# from matplotlib.font_manager import FontManager
+# fm = FontManager()
+# mat_fonts = set(f.name for f in fm.ttflist)
+# # print(mat_fonts)看系统支持的字体，但是选取里面的字体仍然会初心啊不支持中文的情况，选用以下字体能支持中文
+# plt.rcParams['font.sans-serif'] = ['Arial Unicode MS']
+# 或者 plt.rc('font', family='SimHei', size=13)
 
 
 
