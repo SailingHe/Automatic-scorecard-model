@@ -27,6 +27,7 @@ HTML('<style>{}</style>'.format(CSS))
 
 
 #包加载
+#包加载
 import sys
 import os ##显示工作路径，修改工作路径的包
 import numpy as np##是python数值计算基石，听过多种数据结构，算法以及设计计算所需的接口
@@ -35,11 +36,17 @@ import math
 import statsmodels.api as sm##统计分析包，方差分析，时间序列分析，非参数估计 import statsmodels.api as sm
 from statsmodels.stats.outliers_influence import variance_inflation_factor
 from sklearn import preprocessing
+from sklearn.impute import SimpleImputer
 from sklearn.model_selection import train_test_split
 from sklearn import metrics 
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import cross_validate
+from sklearn.model_selection import StratifiedKFold,KFold,RepeatedStratifiedKFold,RepeatedKFold
+from sklearn.model_selection import ShuffleSplit,StratifiedShuffleSplit
 from sklearn.tree import DecisionTreeClassifier,_tree
+from sklearn.metrics.scorer import make_scorer
+from sklearn.model_selection import GridSearchCV
 from IPython.display import display
 import warnings
 warnings.filterwarnings('ignore')
@@ -113,7 +120,7 @@ data["repay_date"]=data["repay_date"].astype("datetime64")
 # data["register_time"]=data["register_time"].astype("datetime64")
 # data["register_time_hour"]=data["register_time"].hour
 
-data["os_new"]=data["os"].map(lambda x:x[0:10])
+# data["os_new"]=data["os"].map(lambda x:x[0:10])
 
 
 # data["app_type_num"] = data.apply(lambda x : sum([1 if x[i] > 0 else 0 for i in var_list]) , axis=1)
@@ -154,13 +161,13 @@ def sample_tag(x):
         
 
 data['target']=data.overdue_days.apply(lambda x:sample_tag(x))
-data=data[data['apply_time']>'2020-04-03']
+data=data[data['apply_time']>'']
 
 
 
 print("\033[1;31m样本好坏用户数量\n \033[0m",data['target'].value_counts())
 
-# data=data[(data['repay_date']<='2020-03-30')&(data['repay_date']>='2020-03-04')]
+# data=data[(data['repay_date']<='')&(data['repay_date']>='')]
 # print(data.target.value_counts())
 print("\033[1;31m申请时间分布\n \033[0m")
 show(data['apply_time'].value_counts())
@@ -354,8 +361,8 @@ data_fillna.to_excel("data_fillna.xlsx")
 
 #训练集，时间外验证集拆分
 data_fillna=data_fillna[data_fillna['target'] !=2]
-train_data=data_fillna[data_fillna['apply_time']<'2020-04-23']
-oot_data=data_fillna[data_fillna['apply_time']>='2020-04-23']
+train_data=data_fillna[data_fillna['apply_time']<'']
+oot_data=data_fillna[data_fillna['apply_time']>='']
 # print(data_fillna['apply_time'].value_counts())
 
 # print(train_data.overdue_days.value_counts())
@@ -377,8 +384,7 @@ print("\033[1;31m时间外验证集好坏用户，1表示坏用户：\n\033[0m",
 target="target" #目标特征对应的字段名称
 key_name="order_id" #唯一识别用户的字段，在最后面需要知道具体是哪个用户的得分的时候，需要用到
 target_series=pd.Series("target")
-not_model_feature=["media_source",'order_id', 'account_id', 'loan', 'period', 'apply_time', 'loan_dt',
-       'finish_dt', 'repay_date', 'overdue_days',"date_of_birth","imei","imei_md5",'dt', 'deadline_days','os']
+not_model_feature=[]
 
 #建模前记录下train_data的用户ID和index
 train_id=train_data[key_name]
@@ -387,7 +393,7 @@ train_id=train_data[key_name]
 #删除掉
 train_data=train_data.drop(not_model_feature,axis=1)
 
-print("\033[1;31m去除事后以及事后以及根据经验较为波动不适宜入模的变量：\n \033[0m",not_model_feature)
+print("\033[1;31m去除事后以及根据经验较为波动不适宜入模的变量：\n \033[0m",not_model_feature)
 
 
 # ###  psi筛选
@@ -708,7 +714,7 @@ show(auto_adjust_iv_df)
 
 
 #删除自动调整后不单调变量
-col_rengong_tiaozheng_list=["dev_sms_pdl_amnt_min"] 
+col_rengong_tiaozheng_list=[""] 
 
 auto_adjust_iv_df=auto_adjust_iv_df[~auto_adjust_iv_df['col'].isin(col_rengong_tiaozheng_list)]
 # print("删除自动调整后不单调变量后剩余的变量",auto_adjust_iv_df.col.unique())
@@ -716,7 +722,7 @@ auto_adjust_iv_df=auto_adjust_iv_df[~auto_adjust_iv_df['col'].isin(col_rengong_t
 
 #针对自动调整没有单调的变量，手动调整
 rengong_adjust_bin_list=[]
-dev_sms_pdl_amnt_min_bin = self_f_2.binning_trim(train_data, "dev_sms_pdl_amnt_min", target, 
+dev_sms_pdl_amnt_min_bin = self_f_2.binning_trim(train_data, "", target, 
                                                 cut=[float('-inf'),-999,1427,float('inf')], right_border=True)
 rengong_adjust_bin_list.append(dev_sms_pdl_amnt_min_bin)
 
@@ -744,10 +750,7 @@ show(adjust_iv_df_all_rengong)
 
 adjust_iv_df_all=adjust_iv_df_all[adjust_iv_df_all["IV"]>0.03]
 
-low_iv_not_dandiao=['dev_apps_EDUorBOOKS_gapdays_max',
-       'dev_contact_tel_same_avg','dev_apps_COMMorSOC_gapdays_min',
-       'dev_apps_GAME_NOTCASINO_installdays_max',
-       'dev_apps_COMMorSOC_gapdays_mean']
+low_iv_not_dandiao=[]
 
 adjust_iv_df_all=adjust_iv_df_all[-adjust_iv_df_all['col'].isin(low_iv_not_dandiao)]
 
@@ -977,9 +980,7 @@ self_f_2.plot_model_ks(y_oot,oot_pre)
 # 评分转换
 # A,B,base_score = self_f_2.cal_scale(650,1,30,lr_model)
 
-# A=710
-# B=round(20/np.log(2),4)
-# base_score=592
+
 dict_score_scale={"A":A,"B":B,"base_score":base_score}
 df_score_scale=pd.DataFrame(pd.Series(dict_score_scale),columns=["value"])
 df_score_scale=df_score_scale.reset_index().rename(columns={'index':'type'})
